@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+output/
+.idea/
+.vscode/
+*.egg-info/
+.ipynb_checkpoints/
+*.zip
