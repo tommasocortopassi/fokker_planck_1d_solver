@@ -1,9 +1,7 @@
 # 1D Fokker-Planck Solver
-
+*Three independent solvers against the exact solution:*
 ![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
 
-This project solves a 1D `Fokker-Planck` equation with two independent
-numerical approaches to the same physics:
 
 - a **finite-volume PDE solver** (forward and backward Euler)
 - an **Euler-Maruyama particle solver** for the equivalent stochastic
