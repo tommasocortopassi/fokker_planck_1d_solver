@@ -151,7 +151,7 @@ diffusion introduced by the methods, which is also reported in the GUI.
 `fp1d/stochastic_solver.py` simulates the SDE in (2) directly:
 
 $$
-X_{n+1} = X_n + b(X_n, t_n) dt + \sqrt{2 D(X_n, t_n) dt}\; Z, \qquad Z \sim N(0, 1)
+X_{n+1} = X_n + b(X_n, t_n) dt + \sqrt{2 D(X_n, t_n) dt} Z, \qquad Z \sim N(0, 1)
 $$
 
 for an ensemble of independent trajectories, then recovers $p(x, t)$ as a
