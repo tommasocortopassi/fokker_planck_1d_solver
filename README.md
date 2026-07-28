@@ -20,7 +20,7 @@ evolves under a deterministic drift $b(x, t)$ and a diffusion coefficient
 $D(x, t) \geq 0$:
 
 $$
-\partial_t p = -\partial_x( b(x,t) p ) + \partial_{xx}^2( D(x,t) p ) = -\partial_x J(x,t) \qqauad (1)
+\partial_t p = -\partial_x( b(x,t) p ) + \partial_{xx}^2( D(x,t) p ) = -\partial_x J(x,t) \qquad (1)
 $$
 
 where the flux is $J(x,t) = b(x,t) p - \partial_x[D(x,t) p]$. Writing the
