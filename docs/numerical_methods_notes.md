@@ -1,6 +1,6 @@
 # Numerical Methods for the 1D Fokker-Planck Equation
 
-*Detailed notes on discretizing an advection-diffusion equation in two
+*Detailed notes on discretizing an aFokker-Planck equation in two
 different ways, and why both ways agree.*
 
 These notes assume you've seen single-variable calculus (Taylor series,
@@ -21,7 +21,7 @@ piece is the way it is.
 We're solving
 
 $$
-\partial_t p = -\partial_x( b(x,t) p ) + \partial_{xx}^2( D(x,t) p ) = -\partial_x J(x,t) \tag{1}, 
+   \partial_t p = -\partial_x( b(x,t) p ) + \partial_{xx}^2( D(x,t) p ) = -\partial_x J(x,t) \qquad (1), 
 $$
 
 for a density $p(x, t) \geq 0$ with $\int p(x,t) dx = 1$ (or less, if probability can
@@ -49,7 +49,7 @@ describes:
   position $X_t$ obeys the stochastic differential equation (SDE)
 
   $$
-  dX_t = b(X_t, t) dt + \sqrt{2 D(X_t, t)} dW_t \tag{2}
+  dX_t = b(X_t, t) dt + \sqrt{2 D(X_t, t)} dW_t \qquad (2)
   $$
 
   where $W_t$ is a Brownian motion. The resulting density, in the limit of an infinite
@@ -91,7 +91,7 @@ $$
 which satisfy
 
 $$
-\partial_t p_t [i] =dx^{-1} \int_{I_i} \partial_t p(x,t) dx = -dx^{-1}\int_{I_i} \partial_x J(x,t) dx =- \frac{J_t[x_{i+1}]-J_t[x_i]}{dx} \tag{3},
+\partial_t p_t [i] =dx^{-1} \int_{I_i} \partial_t p(x,t) dx = -dx^{-1}\int_{I_i} \partial_x J(x,t) dx =- \frac{J_t[x_{i+1}]-J_t[x_i]}{dx} \qquad (3),
 $$
 
 where 
@@ -105,7 +105,7 @@ once with a `+` sign (leaving its left cell) and once with a `-` sign
 domain-boundary fluxes survive:
 
 $$
-\frac{d}{dt} \text{Total mass at time t} = \frac{d}{dt} \int_I p(x,t) dx=J_t[x_1] - J_t[x_{n+1}] \tag{4}.
+\frac{d}{dt} \text{Total mass at time t} = \frac{d}{dt} \int_I p(x,t) dx=J_t[x_1] - J_t[x_{n+1}] \qquad (4).
 $$
 
 That is, positive fluxes at the left extreme of the domain makes mass increase (there is a positive
@@ -125,7 +125,7 @@ averaged values of $p(x,t), b(x,t)$ and $D(x,t)$. In particular, we choose the f
 discretization
 
 $$
-J_t[x_i] = \frac{b_t[i+1] - b_t[i]}{dx}\,p_{\text{upwind}} - \frac{D_t[i+1]\,p_t[i+1] - D_t[i]\,p_t[i]}{\text{distance}} \tag{5}
+J_t[x_i] = \frac{b_t[i+1] - b_t[i]}{dx}p_{\text{upwind}} - \frac{D_t[i+1]p_t[i+1] - D_t[i]p_t[i]}{\text{distance}} \qquad (5)
 $$
 
 
@@ -170,10 +170,10 @@ also perform the error analysis using `Taylor` expansion using such frozen coeff
 With $b,D$ constant, the Fokker-Planck equation reduces to 
 
 $$
-\partial_t p + b\,\partial_x p = D\,\partial_x^2 p. \tag{6}
+\partial_t p + b\partial_x p = D\partial_x^2 p. \qquad (6)
 $$
 
-We discretize on a uniform grid $x_j = j\,\Delta x$, $t^n = n\,\Delta t$,
+We discretize on a uniform grid $x_j = j\Delta x$, $t^n = n\Delta t$,
 writing $p_j^n$ for the numerical approximation to $p(x_j,t^n)$. (To avoid
 a clash with the imaginary unit $i$ below, we index grid points by $j$ in
 this section, rather than $i$ as in §1.1–§1.3). Taking
@@ -182,7 +182,7 @@ downwind neighbor and $|b|$ throughout), the forward-Euler, upwind +
 centered-diffusion scheme reads
 
 $$
-\mathcal{N}_{\Delta t,\Delta x}[p(x_j, t_n)]=\frac{p_j^{n+1}-p_j^n}{\Delta t} + b\,\frac{p_j^n - p_{j-1}^n}{\Delta x} = D\,\frac{p_{j+1}^n - 2p_j^n + p_{j-1}^n}{\Delta x^2}. \tag{FE}
+\mathcal{N}_{\Delta t,\Delta x}[p(x_j, t_n)]=\frac{p_j^{n+1}-p_j^n}{\Delta t} + b\frac{p_j^n - p_{j-1}^n}{\Delta x} = D\frac{p_{j+1}^n - 2p_j^n + p_{j-1}^n}{\Delta x^2}. \quad (FE)
 $$
 
 #### 1.4.1 Taylor expansion analysis: consistency and truncation error
@@ -219,13 +219,13 @@ $$
 Substituting into $\tau_j^n$:
 
 $$
-\tau_j^n = \underbrace{\Big[\partial_t p + b\,\partial_x p - D\,\partial_x^2 p\Big]}_{=\,0,\ p \text{ solves } (6)} + \frac{\Delta t}{2}\partial_t^2 p - \frac{b\,\Delta x}{2}\partial_x^2 p  + O(\Delta t^2,\Delta x^2).
+\tau_j^n = \underbrace{\Big[\partial_t p + b\partial_x p - D\partial_x^2 p\Big]}_{=0,\ p \text{ solves } (6)} + \frac{\Delta t}{2}\partial_t^2 p - \frac{b\Delta x}{2}\partial_x^2 p  + O(\Delta t^2,\Delta x^2).
 $$
 
 The bracket vanishes because $p$ is the exact solution, leaving
 
 $$
-\tau_j^n = \frac{\Delta t}{2}\partial_t^2 p - \frac{b\,\Delta x}{2}\partial_x^2 p + O(\Delta t^2, \Delta x^2). 
+\tau_j^n = \frac{\Delta t}{2}\partial_t^2 p - \frac{b\Delta x}{2}\partial_x^2 p + O(\Delta t^2, \Delta x^2). 
 $$
 
 We substitute $\partial_t p = - b \partial_x p + D\partial_{xx}p$ twice in the duble time derivative to find:
@@ -275,11 +275,11 @@ step; that is a separate question, answered only by the stability analysis of th
 We define the following quantities:
 
 $$
-\lambda := \frac{|b|\,\Delta t}{\Delta x} \qquad(\text{CFL number}),
+\lambda := \frac{|b|\Delta t}{\Delta x} \qquad(\text{CFL number}),
 $$
 
 $$
-\mu := \frac{D\,\Delta t}{\Delta x^2} \qquad(\text{diffusion number}).
+\mu := \frac{D\Delta t}{\Delta x^2} \qquad(\text{diffusion number}).
 $$
 
 
@@ -304,7 +304,7 @@ Using $1-e^{-i\theta} = 2\sin^2(\theta/2) + i\sin\theta$ and
 $e^{i\theta}-2+e^{-i\theta} = -4\sin^2(\theta/2)$:
 
 $$
-\xi(\theta) = 1 - 2(\lambda+2\mu)\sin^2\!\Big(\frac{\theta}{2}\Big) - i\lambda\sin\theta.
+\xi(\theta) = 1 - 2(\lambda+2\mu)\sin^2 \Big(\frac{\theta}{2}\Big) - i\lambda\sin\theta.
 $$
 
 **Stability condition.** The scheme is stable iff $|\xi(\theta)|\le 1$ for
@@ -314,7 +314,7 @@ factor $|\xi|>1$ at every step, so an arbitrarily small error grows like
 $|\xi|^n \to \infty$. It can be found easily that the **exact** stability condition for (FE) is
 
 $$
-\boxed{\ \lambda + 2\mu \le 1\ } \qquad\Longleftrightarrow\qquad \frac{|b|\,\Delta t}{\Delta x} + \frac{2D\,\Delta t}{\Delta x^2} \le 1.
+\boxed{\ \lambda + 2\mu \le 1\ } \qquad\Longleftrightarrow\qquad \frac{|b|\Delta t}{\Delta x} + \frac{2D\Delta t}{\Delta x^2} \le 1.
 $$
 
 This single bound recovers both limiting cases derived separately
@@ -326,7 +326,7 @@ elsewhere in these notes: setting $\mu=0$ (pure advection) gives $\lambda
 Define the **Péclet number**
 
 $$
-\mathrm{Pe}_h := \frac{|b|\,\Delta x}{D}.
+\mathrm{Pe}_h := \frac{|b|\Delta x}{D}.
 $$
 
 A one-line calculation relates it to $\lambda,\mu$ exactly:
@@ -359,14 +359,14 @@ threshold $\lambda+2\mu\le 1$.
 level:
 
 $$
-\frac{p_j^{n+1}-p_j^n}{\Delta t} + b\,\frac{p_j^{n+1}-p_{j-1}^{n+1}}{\Delta x} = D\,\frac{p_{j+1}^{n+1}-2p_j^{n+1}+p_{j-1}^{n+1}}{\Delta x^2} \tag{BE}.
+\frac{p_j^{n+1}-p_j^n}{\Delta t} + b\frac{p_j^{n+1}-p_{j-1}^{n+1}}{\Delta x} = D\frac{p_{j+1}^{n+1}-2p_j^{n+1}+p_{j-1}^{n+1}}{\Delta x^2} \quad (BE).
 $$
 
 The same substitution $p_j^n = \xi^n e^{i\theta j}$ now gives $\xi$ on the
 *left*-hand side of the equation defining it:
 
 $$
-\xi\Big[1 + 2a\sin^2\!\Big(\frac{\theta}{2}\Big) + i\lambda\sin\theta\Big] = 1, \qquad a=\lambda+2\mu,
+\xi\Big[1 + 2a\sin^2 \Big(\frac{\theta}{2}\Big) + i\lambda\sin\theta\Big] = 1, \qquad a=\lambda+2\mu,
 $$
 
 so
@@ -410,7 +410,7 @@ Instead of tracking $p(x,t)$ on a grid, imagine releasing many independent
 particles, each moving under the SDE
 
 $$
-dX_t = b(X_t, t)\,dt + \sigma(X_t, t)\,dW_t, \quad \sigma = \sqrt{2D}
+dX_t = b(X_t, t)dt + \sigma(X_t, t)dW_t, \quad \sigma = \sqrt{2D}
 $$
 
 and ask: at time $t$, what does the *distribution* of $X_t$ look like
@@ -440,16 +440,16 @@ $$
 df_t = f_t'(X_t) dX_t + \frac{1}{2}f_t''(X_t) (dX_t)^2 + ...
 $$
 
-With $dX_t = b(X_t,t)\,dt + \sigma(X_t,t)\,dW_t$:
+With $dX_t = b(X_t,t)dt + \sigma(X_t,t)dW_t$:
 
 $$
-E[(dX_t)^2] = \sigma(X_t,t)^2\,E[(dW_t)^2] + 2b(X_t,t)\sigma(X_t,t)\,dt\,E[dW_t] + b(X_t,t)^2 dt^2 \approx \sigma(X_t,t)^2\,dt \quad \text{(using } E[(dW_t)^2] \approx dt\text{)}
+E[(dX_t)^2] = \sigma(X_t,t)^2E[(dW_t)^2] + 2b(X_t,t)\sigma(X_t,t)dtE[dW_t] + b(X_t,t)^2 dt^2 \approx \sigma(X_t,t)^2dt \quad \text{(using } E[(dW_t)^2] \approx dt\text{)}
 $$
 
 So Ito's formula reads
 
 $$
-df_t = \left[ b(X_t,t) f_t'(X_t) + D(X_t,t) f_t''(X_t) \right] dt + \sigma(X_t,t) f'(X_t)\,dW_t
+df_t = \left[ b(X_t,t) f_t'(X_t) + D(X_t,t) f_t''(X_t) \right] dt + \sigma(X_t,t) f'(X_t)dW_t
 $$
 
 Define the **generator** of the process,
@@ -460,7 +460,7 @@ $$
 
 so that  we can write 
 
-$$df_t = (Lf_t)\,dt + \sigma(X_t)\,f_t''\,dW_t.$$
+$$df_t = (Lf_t)dt + \sigma(X_t)f_t''dW_t.$$
 
 ### 2.4 From one path to the whole density: deriving Fokker-Planck
 
@@ -497,7 +497,7 @@ We finally have:
 
 
 $$
-\int_I f \partial_t p dx = \int_I f [ -(bp)' + (Dp)'' ]  dx + \text{ Boundary terms (B.T.)} \qquad \text{ for every f smooth} \tag{7}.
+\int_I f \partial_t p dx = \int_I f [ -(bp)' + (Dp)'' ]  dx + \text{ Boundary terms (B.T.)} \qquad \text{ for every f smooth} \quad (7).
 $$
 
 First of all, let us see the effect of the boundary conditions considered: periodic, homogeneous Neumann, homogeneous Dirichlet.

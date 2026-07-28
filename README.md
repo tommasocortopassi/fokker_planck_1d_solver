@@ -20,7 +20,7 @@ evolves under a deterministic drift $b(x, t)$ and a diffusion coefficient
 $D(x, t) \geq 0$:
 
 $$
-\partial_t p = -\partial_x( b(x,t) p ) + \partial_{xx}^2( D(x,t) p ) = -\partial_x J(x,t) \tag{1}
+\partial_t p = -\partial_x( b(x,t) p ) + \partial_{xx}^2( D(x,t) p ) = -\partial_x J(x,t) \qqauad (1)
 $$
 
 where the flux is $J(x,t) = b(x,t) p - \partial_x[D(x,t) p]$. Writing the
@@ -33,7 +33,7 @@ $D(x,t)$.
 Equation (1) is also the density evolution equation for the Ito process
 
 $$
-dX_t = b(X_t, t)\, dt + \sqrt{2 D(X_t, t)}\, dW_t .\tag{2}
+dX_t = b(X_t, t) dt + \sqrt{2 D(X_t, t)} dW_t .\qquad (2)
 $$
 
 Both solvers in this repository target the same $p(x, t)$: one by
@@ -69,7 +69,7 @@ over every cell telescopes: every interior face flux cancels, and only the
 two domain-boundary fluxes survive, so
 
 $$
-\frac{d}{dt}\int_I p(x,t)\,dx = J_t[x_1] - J_t[x_{n+1}].
+\frac{d}{dt}\int_I p(x,t)dx = J_t[x_1] - J_t[x_{n+1}].
 $$
 
 **Mass conservation is therefore a structural property of the
@@ -85,13 +85,13 @@ The only approximation the scheme makes is in reconstructing $J$ at each
 face from the two neighboring cell averages on the left $p_L$ and on the right $p_R$ (and
 $b_L, b_R, D_L, D_R$):
 
-- The **diffusive part** is a centered difference of $D\,p$ between the two
+- The **diffusive part** is a centered difference of $Dp$ between the two
   neighboring cells.
 - The **advective part** is **upwinded**: it uses $p_L$ if the flow points
   left-to-right at that face, $p_R$ otherwise. Upwinding is what keeps the
   explicit scheme stable at any Peclet number - a centered average of
   $p_L, p_R$ would oscillate once advection dominates diffusion - at the
-  cost of quietly adding a numerical diffusion term of size $\sim |b|\,dx$.
+  cost of quietly adding a numerical diffusion term of size $\sim |b|dx$.
   See `docs/numerical_methods_notes.md` §1.2 for mor details.
 
 Because both terms are linear in $(p_L, p_R)$, the whole face flux is
@@ -116,13 +116,13 @@ assembles directly into a sparse matrix, face by face.
 
 Writing the assembled system as $dp/dt = A p $, we discretize in time as:
 
-- **Forward Euler**: $p^{m+1} = p^m + dt\,(A^m p^m)$. One sparse
+- **Forward Euler**: $p^{m+1} = p^m + dt(A^m p^m)$. One sparse
   matrix-vector product per step. Cheap, but only *conditionally* stable:
   if $dt$ is too large relative to $dx$ and the size of $b$, $D$, small
   errors are amplified instead of damped. The GUI computes the CFL/Peclet
   bounds below and warns before running if $dt$ exceeds them (see
   `fp1d/diagnostics.py`), but still lets you proceed.
-- **Backward Euler**: $(I - dt\,A)\,p^{m+1} = p^m$. One sparse
+- **Backward Euler**: $(I - dtA)p^{m+1} = p^m$. One sparse
   linear solve per step. Because the update is implicit, it is
   **unconditionally stable** in the diffusive sense. There is no $dt$ threshold below 
   which it must stay to avoid blowing up. It still loses
@@ -141,7 +141,7 @@ diffusion introduced by the methods, which is also reported in the GUI.
 - **Diffusive CFL** $= \max \{D(x,t) dt / dx^2\}$: how far diffusion spreads in
   one step. Forward Euler requires `advective CFL + 2diffusive CFL <= 1` to stay
   stable.
-- **Peclet number** $\mathrm{Pe} = \max\{\lvert b(x,t)\rvert\,dx / (2D(x,t))\}$: the
+- **Peclet number** $\mathrm{Pe} = \max\{\lvert b(x,t)\rvertdx / (2D(x,t))\}$: the
   ratio of advective to diffusive transport *across one cell*. It does not
   constrain $dt$, but it tells you whether the local physics is dominated by advection or
   diffusion.
@@ -151,7 +151,7 @@ diffusion introduced by the methods, which is also reported in the GUI.
 `fp1d/stochastic_solver.py` simulates the SDE in (2) directly:
 
 $$
-X_{n+1} = X_n + b(X_n, t_n)\, dt + \sqrt{2 D(X_n, t_n)\, dt}\; Z, \qquad Z \sim N(0, 1)
+X_{n+1} = X_n + b(X_n, t_n) dt + \sqrt{2 D(X_n, t_n) dt}\; Z, \qquad Z \sim N(0, 1)
 $$
 
 for an ensemble of independent trajectories, then recovers $p(x, t)$ as a
