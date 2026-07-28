@@ -1,5 +1,7 @@
 # 1D Fokker-Planck Solver
 
+![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
+
 This project solves a 1D `Fokker-Planck` equation with two independent
 numerical approaches to the same physics:
 
