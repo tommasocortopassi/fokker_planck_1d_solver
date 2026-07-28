@@ -2,7 +2,7 @@
 *Three independent solvers against the exact solution:*
 ![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
 
-
+This project implements solvers for a 1-dimensional Fokker-Planck equation:
 - a **finite-volume PDE solver** (forward and backward Euler)
 - an **Euler-Maruyama particle solver** for the equivalent stochastic
   differential equation (SDE)
