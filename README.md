@@ -141,7 +141,7 @@ diffusion introduced by the methods, which is also reported in the GUI.
 - **Diffusive CFL** $= \max \{D(x,t) dt / dx^2\}$: how far diffusion spreads in
   one step. Forward Euler requires `advective CFL + 2diffusive CFL <= 1` to stay
   stable.
-- **Peclet number** $\mathrm{Pe} = \max\{\lvert b(x,t)\rvertdx / (2D(x,t))\}$: the
+- **Peclet number** $\mathrm{Pe} = \max\{| b(x,t)|dx / (2D(x,t))\}$: the
   ratio of advective to diffusive transport *across one cell*. It does not
   constrain $dt$, but it tells you whether the local physics is dominated by advection or
   diffusion.
