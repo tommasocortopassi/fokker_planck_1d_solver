@@ -47,11 +47,9 @@ describes:
   *particles* moving randomly, and let the density be whatever
   distribution those particles happen to have at time $t$. A particle's
   position $X_t$ obeys the stochastic differential equation (SDE)
-
-  $$
-  dX_t = b(X_t, t) dt + \sqrt{2 D(X_t, t)} dW_t \qquad (2)
-  $$
-
+  
+  $$dX_t = b(X_t, t) dt + \sqrt{2 D(X_t, t)} dW_t \qquad (2)$$
+  
   where $W_t$ is a Brownian motion. The resulting density, in the limit of an infinite
   number of tracked particles, is precisely $p(x,t)$.
 
@@ -66,8 +64,8 @@ and derives, from scratch, why the resulting particle cloud reproduces the
 ## Part I — The Eulerian route: finite volumes
 
 *(We use "cells" and "faces" throughout, as is standard for finite-volume
-schemes, even though in 1D these are simply intervals and points - a
-"cell" is an interval $I_i$, a "face" is one of its two endpoints.)*
+schemes, even though in 1D these are simply intervals and points: a
+"cell" is an interval, a "face" is one of its two endpoints.)*
 
 ### 1.1 Cell averages give an *exact* identity 
 
@@ -96,7 +94,7 @@ $$
 
 where 
 
-$$ J_t [x_i] = J_t \text{ evaluated at } x_i.$$
+$$J_t [x_i] = J_t \text{ evaluated at } x_i.$$
 
 
 Summing over every cell has a telescopic effect: every interior face flux appears
@@ -187,13 +185,13 @@ $$
 
 #### 1.4.1 Taylor expansion analysis: consistency and truncation error
 
-Given a discrete scheme $\mathcal{N}_{\Delta t,\Delta x}[p]=0$ intended to
-approximate a PDE $\mathcal{P}[p]=0$, the **local truncation error** at
-$(x_j,t^n)$ is the residual obtained by substituting the *exact* solution
+Given a discrete scheme $\mathcal{N}_{\Delta t,\Delta x}[p]$ intended to
+approximate a PDE, the **local truncation error** at
+$(x_j,t^n)$ is the residual obtained by substituting the *exact* solution $p$
 of the continuous problem into the discrete equations:
 
 $$
-\tau_j^n := \mathcal{N}_{\Delta t,\Delta x}\big[p_{\text{exact}}\big](x_j,t^n).
+\tau_j^n := \mathcal{N}_{\Delta t,\Delta x} [p (x_j,t^n)].
 $$
 
 The scheme is **consistent** if $\tau_j^n \to 0$ as $\Delta t,\Delta x \to
@@ -230,9 +228,10 @@ $$
 
 We substitute $\partial_t p = - b \partial_x p + D\partial_{xx}p$ twice in the duble time derivative to find:
 
-$$
-\tau_j^n = \frac{b}{2} (b \Delta t - \Delta x) \partial_x^2 p  + O(\Delta t, \Delta x ^2). 
-$$
+
+$$\tau_j^n = \frac{b}{2} (b \Delta t - \Delta x) \partial_x^2 p  + O(\Delta t, \Delta x ^2).$$
+
+
 Two conclusions follow:
 
 **Consistency and order.** Since $\tau_j^n \to 0$ as $\Delta t,\Delta x \to
@@ -326,28 +325,29 @@ elsewhere in these notes: setting $\mu=0$ (pure advection) gives $\lambda
 Define the **Péclet number**
 
 $$
-\mathrm{Pe}_h := \frac{|b|\Delta x}{D}.
+Pe_h := \frac{|b|\Delta x}{D}.
 $$
 
 A one-line calculation relates it to $\lambda,\mu$ exactly:
 
 $$
-\mathrm{Pe}_h = \frac{\lambda}{\mu}.
+Pe_h = \frac{\lambda}{\mu}.
 $$
 
-Unlike $\lambda,\mu$, $\mathrm{Pe}_h$ does not depend on $\Delta t$ at
+Unlike $\lambda,\mu$, $Pe_h$ does not depend on $\Delta t$ at
 all: it is a purely spatial statement about how well the mesh resolves
 the *local* competition between advection and diffusion, independent of
 any time-stepping choice. For a *centered* difference
 of the advective term (not the upwind scheme used here), large
-$\mathrm{Pe}_h$ produces genuine non-physical oscillations: centered
-advection is non-monotone once $\mathrm{Pe}_h$ exceeds roughly $2$,
+$Pe_h$ produces genuine non-physical oscillations: centered
+advection is non-monotone once $Pe_h$ exceeds roughly 2,
 regardless of the time step. Because this project upwinds (§1.2), it is immune
-to that particular pathology. Instead, large
-$\mathrm{Pe}_h$ here signals that the artificial diffusion may become large compared to the true $D$: the effective diffusion $D_{eff}$ can be rewritten as
+to that particular pathology. Instead, large $Pe_h$ 
+here signals that the artificial diffusion may become large compared to the true $D$: 
+the effective diffusion $D_{eff}$ can be rewritten as
 
 $$
-D_{\text{eff}} = D\left(1 + \frac{\mathrm{Pe}_h}{2}  (1- \lambda)\right).
+D_{eff} = D\left(1 + \frac{Pe_h}{2}  (1- \lambda)\right).
 $$
 
 #### 1.4.3 Comparison of forward and backward Euler
@@ -384,7 +384,7 @@ only first order in $\Delta t$, so a large $\Delta t$ still produces a
 large truncation error even though the scheme will not diverge. More
 importantly, the spatial part of the truncation error comes entirely from
 the spatial discretization and does not involve the time integrator at
-all. Switching to backward Euler removes the $\Delta t$-vs-$\Delta x$
+all. Switching to backward Euler removes the $\Delta t$ vs $\Delta x$
 stability constraint, but it does nothing to reduce artificial diffusion:
 $\Delta x$ still has to be small enough, relative to $|b|$ and $D$, for the
 solution to be *accurate*, whichever time integrator is used.
@@ -410,7 +410,7 @@ Instead of tracking $p(x,t)$ on a grid, imagine releasing many independent
 particles, each moving under the SDE
 
 $$
-dX_t = b(X_t, t)dt + \sigma(X_t, t)dW_t, \quad \sigma = \sqrt{2D}
+dX_t = b(X_t, t)dt + \sigma(X_t, t)dW_t, \quad \sigma = \sqrt{2D(x,t)}
 $$
 
 and ask: at time $t$, what does the *distribution* of $X_t$ look like
@@ -516,13 +516,14 @@ Hence:
 
 Since (7) holds for every smooth function $f$ such that $f'(\alpha)= f'(\beta)=0$, by the fundamental lemma of calculus of variations:
 
-
-$$ \partial_t p (x,t) + \partial_x (b(x,t)p(x,t)) - \partial_x ^2 (D(x,t)p(x,t))=0$$,
+$$\partial_t p (x,t) + \partial_x (b(x,t)p(x,t)) - \partial_x ^2 (D(x,t)p(x,t))=0,$$
 
 which is exactly Fokker-Planck equation from Part I. In the cse of homogeneous Dirichlet BC, we still get that $p(x,t)$ solves Fokker-Planck
 at interior points (for instance restricting to compactly supported test functions $f$), but considering $J= (bp) - (Dp)'$:
 
-$$ \frac{d}{dt} \int_I p(x,t)= \int_I \partial_x  J(x,t)dx= -[J(x,t)]_{\alpha} ^\beta \leq 0 \implies \text{ The mass of p decreases.}$$
+
+$$\frac{d}{dt} \int_I p(x,t)= \int_I \partial_x  J(x,t)dx= -[J(x,t)]_{\alpha} ^\beta \leq 0 \implies \text{ The mass of p decreases.}$$
+
 
 ### 2.5 Discretizing the SDE: Euler-Maruyama
 
