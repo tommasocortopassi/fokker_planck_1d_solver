@@ -32,7 +32,7 @@ a cosmetic rewriting — it is the entire reason the numerical scheme conserves 
 
 You may be more used to seeing the diffusion term written $\partial_x (D \partial_x p)$
 instead. The two are **the same equation only when $D$ is constant** — they
-differ by a term proportional to $\partial_x D$ whenever $D$ varies with $x$. §2.8
+differ by a term proportional to $\partial_x D$ whenever $D$ varies with $x$. §2.4
 explains why this project deliberately uses the $\partial_x ^2 (Dp)$ form: it is
 the one that makes Parts I and II describe *exactly* the same physics with
 no hidden correction terms, for any $D(x,t)$.
@@ -125,7 +125,7 @@ averaged values of $p(x,t), b(x,t)$ and $D(x,t)$. In particular, we choose the f
 discretization
 
 $$
-J_t[x_i] = \frac{b_{t}[i+1] -b_{t}[i]}{dx} * \operatorname{p_upwind}  -   \frac{\operatorname{D_{t}[i+1]}\operatorname{p_{t}[i+1]} - \operatorname{D_{t}[i]}\operatorname{p_{t}[i]}}{\text{distance}} \tag{5}
+J_t[x_i] = \frac{b_t[i+1] - b_t[i]}{dx}\,p_{\text{upwind}} - \frac{D_t[i+1]\,p_t[i+1] - D_t[i]\,p_t[i]}{\text{distance}} \tag{5}
 $$
 
 
@@ -410,7 +410,7 @@ Instead of tracking $p(x,t)$ on a grid, imagine releasing many independent
 particles, each moving under the SDE
 
 $$
-dX_t = b(X_t, t) dt + σ(X_t, t) dW_t,  \quad  σ = \sqrt{2D}
+dX_t = b(X_t, t)\,dt + \sigma(X_t, t)\,dW_t, \quad \sigma = \sqrt{2D}
 $$
 
 and ask: at time $t$, what does the *distribution* of $X_t$ look like
@@ -425,8 +425,8 @@ The $W_t$ is a stochastic process called `Brownian motion`, characterized by: $W
 $W_{t+dt} - W_t \sim N(0, dt)$. You can think that $dW = W_{t+dt} - W_t$.
 
 Here is the fact that makes stochastic calculus different from ordinary
-calculus: $(dW)² ≈ dt$, not a smaller, negligible quantity. Indeed $E[(dW)^2] = Var(dW) = dt$ by definition, 
-and one can show that $Var((dW)^2) = O(dt^2)$, so as $dt → 0$, $(dW)^2$ concentrates around its
+calculus: $(dW)^2 \approx dt$, not a smaller, negligible quantity. Indeed $E[(dW)^2] = Var(dW) = dt$ by definition, 
+and one can show that $Var((dW)^2) = O(dt^2)$, so as $dt \to 0$, $(dW)^2$ concentrates around its
 mean $dt$ with vanishing relative spread. This single replacement rule is the core of **Ito's
 calculus**.
 
@@ -440,16 +440,16 @@ $$
 df_t = f_t'(X_t) dX_t + \frac{1}{2}f_t''(X_t) (dX_t)^2 + ...
 $$
 
-With $dX_t = b (X_t,t)dt + σ(X_t,t) dW_t$:
+With $dX_t = b(X_t,t)\,dt + \sigma(X_t,t)\,dW_t$:
 
 $$
-E(dX_t)^2] = σ(X_t,t)^2E [(dW_t)^2] + 2b(X_t,t)σ(X_t,t) dt E[dW_t] + b(X_t,t)^2 dt^2  \approx  σ(X_,t)^2 dt   \quad  \text{ (using $E[(dW_t)^2] ≈ dt$)}
+E[(dX_t)^2] = \sigma(X_t,t)^2\,E[(dW_t)^2] + 2b(X_t,t)\sigma(X_t,t)\,dt\,E[dW_t] + b(X_t,t)^2 dt^2 \approx \sigma(X_t,t)^2\,dt \quad \text{(using } E[(dW_t)^2] \approx dt\text{)}
 $$
 
 So Ito's formula reads
 
 $$
-df_t = [ b(X_t,t) f_t'(X_t) + D(X_t,t) f_t''(X_t) ] dt + σ(X_t,t) f'(X_t) dW_t
+df_t = \left[ b(X_t,t) f_t'(X_t) + D(X_t,t) f_t''(X_t) \right] dt + \sigma(X_t,t) f'(X_t)\,dW_t
 $$
 
 Define the **generator** of the process,
@@ -460,7 +460,7 @@ $$
 
 so that  we can write 
 
-$$df_t = (Lf_t) dt + σ(X_t) f_t '' dW_t .$$
+$$df_t = (Lf_t)\,dt + \sigma(X_t)\,f_t''\,dW_t.$$
 
 ### 2.4 From one path to the whole density: deriving Fokker-Planck
 
@@ -545,7 +545,7 @@ they behave very differently:
   thanks to Ito's formula.
 
 Since a density estimated from a histogram is exactly a statistic
-(essentially $E[1_{x ∈ \text{bin}}]$ for each bin), it is the **weak** error that
+(essentially $E[\mathbf{1}_{x \in \text{bin}}]$ for each bin), it is the **weak** error that
 controls how good the reconstructed $p(x,t)$ is, which is the more
 forgiving of the two, and part of why the simple Euler-Maruyama scheme
 (rather than something more elaborate) is a reasonable choice.
