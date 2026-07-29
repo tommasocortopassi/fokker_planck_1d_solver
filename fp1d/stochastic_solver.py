@@ -80,16 +80,14 @@ def _apply_boundary(X, alive, left, right, kind):
     leak into a later histogram through a bookkeeping mistake elsewhere;
     it plays no role in the physics once `alive` is False.
     """
-    active = alive.copy()
-
     if kind == 'periodic':
-        X[active] = left + np.mod(X[active] - left, right - left)
+        X[alive] = left + np.mod(X[alive] - left, right - left)
 
     elif kind == 'neumann':
-        X[active] = _reflect(X[active], left, right)
+        X[alive] = _reflect(X[alive], left, right)
 
     elif kind == 'dirichlet':
-        exited = active & ((X < left) | (X > right))
+        exited = alive & ((X < left) | (X > right))
         X[exited] = np.clip(X[exited], left, right)
         alive[exited] = False
 
@@ -150,6 +148,10 @@ def euler_maruyama(grid, drift, diffusion, p0, n_trials, dt, total_time,
     bc.validate()
     if n_trials < 1:
         raise ValueError('Number of trials must be at least 1.')
+    if dt <= 0.0:
+        raise ValueError('Time step dt must be positive.')
+    if total_time <= 0.0:
+        raise ValueError('Total time must be positive.')
 
     rng = np.random.default_rng(seed)
     left, right = grid.left, grid.right

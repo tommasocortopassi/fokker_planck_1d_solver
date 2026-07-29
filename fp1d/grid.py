@@ -84,7 +84,12 @@ def parse_bound(token: str) -> float:
     live input parsing, so there's exactly one place that defines what
     counts as a valid bound.
     """
-    token = token.strip().lower().replace('\u221e', 'inf')
+    # U+2212 MINUS SIGN and U+221E INFINITY are what a copy-paste from a
+    # typeset formula (or an iOS keyboard) actually produces; neither is
+    # something `float()` accepts.
+    token = (token.strip().lower()
+             .replace('\u2212', '-')
+             .replace('\u221e', 'inf'))
     if token in ('inf', '+inf'):
         return float('inf')
     if token == '-inf':

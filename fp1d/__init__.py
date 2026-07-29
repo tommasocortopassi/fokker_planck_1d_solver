@@ -5,3 +5,5 @@ are all homogeneous. Unbounded domains are truncated adaptively - see
 `domain_truncation.py`. See the top-level README.md for the derivation of
 the numerical schemes.
 """
+from .api import Run, solve
+__all__ = ['solve', 'Run']

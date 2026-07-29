@@ -6,16 +6,12 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+from .api import solve
 from .grid import finite_domain, make_grid, parse_bound
 from .boundary_conditions import BoundaryCondition
-from .diagnostics import sample_diagnostics
-from .initial_conditions import build_initial_density, SAFE_BUILTINS
-from .finite_volume import forward_euler, backward_euler
-from .stochastic_solver import euler_maruyama
-from .domain_truncation import solve_with_adaptive_domain
+from .diagnostics import preflight_warnings, sample_diagnostics
+from .initial_conditions import build_initial_density, safe_eval
 from .coefficients_io import list_coefficient_files, load_coefficient_set
-from .io_utils import create_run_directory, save_json
-from .visualization import plot_snapshots, plot_mass_history, save_solution_npz, save_animation
 
 
 # Where coefficient .npz files live: a 'coefficients' folder next to
@@ -295,23 +291,21 @@ class App(tk.Tk):
             )
             return drift, diffusion, description
 
-        safe_env = {'np': np, '__builtins__': SAFE_BUILTINS}
         drift_expr = self.vars['drift'].get()
         diffusivity_expr = self.vars['diffusivity'].get()
 
-        def drift(x, t=0.0):
-            val = eval(drift_expr, safe_env, {'x': x, 't': t})
-            arr = np.asarray(val, dtype=float)
-            if arr.shape == ():
-                arr = np.full_like(np.asarray(x, dtype=float), float(arr), dtype=float)
-            return arr
+        def evaluate(expr, what):
+            def coefficient(x, t=0.0):
+                val = safe_eval(expr, {'x': x, 't': t}, what)
+                arr = np.asarray(val, dtype=float)
+                if arr.shape == ():
+                    arr = np.full_like(np.asarray(x, dtype=float), float(arr))
+                return arr
 
-        def diffusion(x, t=0.0):
-            val = eval(diffusivity_expr, safe_env, {'x': x, 't': t})
-            arr = np.asarray(val, dtype=float)
-            if arr.shape == ():
-                arr = np.full_like(np.asarray(x, dtype=float), float(arr), dtype=float)
-            return arr
+            return coefficient
+
+        drift = evaluate(drift_expr, 'drift')
+        diffusion = evaluate(diffusivity_expr, 'diffusivity')
 
         description = f"drift = {drift_expr}\ndiffusivity = {diffusivity_expr}"
         return drift, diffusion, description
@@ -568,17 +562,20 @@ class App(tk.Tk):
         try:
             cfg = self.parse_inputs()
             grid, _ = make_grid(cfg.left, cfg.right, cfg.dx)
-            d = sample_diagnostics(grid, cfg.drift, cfg.diffusion, cfg.dt, cfg.total_time)
+            # Same checks `api.solve` runs, so the window and a script
+            # warn about the same things. Conditions with no meaningful
+            # "proceed anyway" - a periodic seam whose coefficients
+            # disagree - raise from in here and land in the dialog below
+            # as an input error, before any work starts.
+            pre_warnings, _ = preflight_warnings(
+                grid, cfg.drift, cfg.diffusion, cfg.dt, cfg.total_time,
+                cfg.method.lower(), cfg.bc.kind)
         except Exception as exc:
             messagebox.showerror('Input error', str(exc))
             return
-        if cfg.method == 'Forward Euler' and not d['stable']:
-            go = messagebox.askyesno(
-                'Stability warning',
-                f"lambda + 2*mu = {d['combined_CFL']:.4g} exceeds the stability "
-                f"limit of 1 (dt = {cfg.dt:.4g}; suggested dt <= "
-                f"{d['dt_suggested']:.4g}).\nProceed anyway?")
-            if not go:
+        if pre_warnings:
+            body = '\n\n'.join(pre_warnings)
+            if not messagebox.askyesno('Warning', f'{body}\n\nProceed anyway?'):
                 return
 
         self.stop_event = threading.Event()
@@ -597,6 +594,15 @@ class App(tk.Tk):
             self.stop_button.config(state='disabled')
 
     def run_solver_worker(self, cfg: RunConfig):
+        """Run one simulation off the main thread and report back.
+
+        The computation itself lives in `api.solve`, which this method
+        and any script share; everything added here is presentation -
+        forwarding progress to the queue that `poll_progress` drains,
+        and formatting the summary. Nothing in this method may touch a
+        Tkinter widget: `cfg` was built on the main thread precisely so
+        this one never has to.
+        """
         try:
             def progress_callback(step, total, current_time):
                 self.progress_queue.put(('progress', step, total, current_time))
@@ -604,85 +610,29 @@ class App(tk.Tk):
             def log(msg):
                 self.progress_queue.put(('message', msg))
 
-            def solve_once(grid):
-                """Build the initial condition on this attempt's grid and
-                run the requested method. Called once per attempt by the
-                adaptive-domain loop below - the grid (and hence the
-                initial condition sampled on it) can change between
-                attempts, so nothing here can be precomputed outside.
-                """
-                p0 = build_initial_density(cfg.initial_condition_name, grid, cfg.custom_expr)
-                common = (grid, cfg.drift, cfg.diffusion)
-                if cfg.method == 'Forward Euler':
-                    return forward_euler(p0, *common, cfg.dt, cfg.total_time, cfg.save_times, cfg.bc,
-                                         progress_callback=progress_callback, stop_event=self.stop_event)
-                elif cfg.method == 'Backward Euler':
-                    return backward_euler(p0, *common, cfg.dt, cfg.total_time, cfg.save_times, cfg.bc,
-                                          progress_callback=progress_callback, stop_event=self.stop_event)
-                else:
-                    return euler_maruyama(grid, cfg.drift, cfg.diffusion, p0, cfg.trials,
-                                          cfg.dt, cfg.total_time, cfg.save_times, cfg.bc,
-                                          seed=cfg.seed,
-                                          progress_callback=progress_callback,
-                                          stop_event=self.stop_event)
-
             if cfg.trunc_msg:
                 log(cfg.trunc_msg)
 
-            grid, result, left, right, trunc_messages = solve_with_adaptive_domain(
-                solve_once, cfg.left, cfg.right, cfg.dx,
-                cfg.left_is_infinite, cfg.right_is_infinite, log=log)
+            run = solve(
+                method=cfg.method, drift=cfg.drift, diffusion=cfg.diffusion,
+                left=cfg.left, right=cfg.right,
+                left_is_infinite=cfg.left_is_infinite,
+                right_is_infinite=cfg.right_is_infinite,
+                dx=cfg.dx, total_time=cfg.total_time, dt=cfg.dt,
+                save_times=cfg.save_times, bc=cfg.bc,
+                initial_condition=cfg.initial_condition_name,
+                custom_expr=cfg.custom_expr,
+                trials=cfg.trials, seed=cfg.seed,
+                coefficient_description=cfg.coeff_description,
+                # Already asked, in `start_solver_thread`, on the main
+                # thread where a dialog is legal. Prompting again from
+                # here would block a worker thread the user cannot see.
+                on_warning='ignore',
+                progress=progress_callback, stop_event=self.stop_event,
+                log=log)
 
-            run_dir = create_run_directory('output')
-            plot_file = run_dir / 'snapshots.png'
-            mass_file = run_dir / 'mass_history.png'
-            solution_file = run_dir / 'solution.npz'
-            params_file = run_dir / 'simulation_parameters.json'
-            video_prefix = run_dir / 'animation'
-
-            params = {
-                'method': cfg.method,
-                'domain_left': grid.left,
-                'domain_right': grid.right,
-                'dx': grid.dx,
-                'ncells': grid.ncells,
-                'T': cfg.total_time,
-                'dt_requested': cfg.dt,
-                'boundary_condition': cfg.bc.kind,
-                'coefficients': cfg.coeff_description,
-                'initial_condition': cfg.initial_condition_name,
-                'custom_expression': cfg.custom_expr,
-                'trials_maruyama': cfg.trials,
-                'trials_completed': result.trials_completed,
-                'seed': cfg.seed,
-                'save_times': result.save_times.tolist(),
-                'mass_at_t0': float(result.masses[0]),
-                'final_mass': float(result.masses[-1]),
-                'stopped_early': result.stopped_early,
-                'final_time_reached': result.final_time,
-            }
-            # Under an absorbing boundary the mass is *supposed* to decay,
-            # so reporting its distance from 1 would read like an error
-            # metric on a perfectly correct run. Report the absorbed
-            # fraction there, and conservation error only where
-            # conservation is actually the expected behavior.
-            if cfg.bc.kind == 'dirichlet':
-                params['absorbed_mass_fraction'] = float(
-                    1.0 - result.masses[-1] / result.masses[0])
-            else:
-                params['max_mass_deviation_from_1'] = float(
-                    max(abs(m - 1.0) for m in result.masses))
-
-            self.progress_queue.put(('message', 'Saving snapshot plot...'))
-            plot_snapshots(result.x, result.save_times, result.snapshots, plot_file)
-            self.progress_queue.put(('message', 'Saving mass history plot...'))
-            plot_mass_history(result.save_times, result.masses, mass_file)
-            self.progress_queue.put(('message', 'Saving solution file...'))
-            save_solution_npz(result.x, result.save_times, result.snapshots, result.masses, solution_file)
-            self.progress_queue.put(('message', 'Saving simulation parameters...'))
-            save_json(params, params_file)
-            self.progress_queue.put(('message', 'Saving animation...'))
-            video_file = save_animation(result.x, result.frame_times, result.frames, video_prefix)
+            result, grid, params = run.result, run.grid, run.parameters
+            files = run.save('output', log=log)
 
             lines = []
             if result.stopped_early:
@@ -707,12 +657,12 @@ class App(tk.Tk):
                 (f'Absorbed fraction: {params["absorbed_mass_fraction"]:.4g}'
                  if cfg.bc.kind == 'dirichlet'
                  else f'Max |mass-1|: {params["max_mass_deviation_from_1"]:.3e}'),
-                f'Run folder: {run_dir.resolve()}',
-                f'Snapshot plot: {plot_file.resolve()}',
-                f'Mass plot: {mass_file.resolve()}',
-                f'Solution file: {solution_file.resolve()}',
-                f'Parameters file: {params_file.resolve()}',
-                f'Animation: {Path(video_file).resolve()}',
+                f'Run folder: {files["directory"].resolve()}',
+                f'Snapshot plot: {files["snapshots"].resolve()}',
+                f'Mass plot: {files["mass_history"].resolve()}',
+                f'Solution file: {files["solution"].resolve()}',
+                f'Parameters file: {files["parameters"].resolve()}',
+                f'Animation: {files["animation"].resolve()}',
             ])
             self.progress_queue.put(('done', lines))
         except Exception as exc:

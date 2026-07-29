@@ -1,5 +1,8 @@
 # 1D Fokker-Planck Solver
-*Three independent solvers against the exact solution:*
++
++[![tests](https://github.com/tommasocortopassi/fokker_planck_1d_solver/actions/workflows/tests.yml/badge.svg)](https://github.com/tommasocortopassi/fokker_planck_1d_solver/actions/workflows/tests.yml)
++
+ *Three independent solvers against the exact solution:*
 ![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
 
 This project implements solvers for a 1-dimensional Fokker-Planck equation:
@@ -48,150 +51,6 @@ We always use the terms cells and faces as usual in finite-volume schemes,
 but since we are in 1D we could replace such terms with intervals and
 points.
 
-## Finite-volume discretization (the PDE solver)
-
-`fp1d/finite_volume.py` uses a cell-centered grid (`fp1d/grid.py`): the
-domain is split into $n$ cells of width $dx$, the unknown $p_t[i]$ is the
-*average* density over cell $i$ at time $t$, and fluxes $J$ are evaluated on the $n+1$
-faces between and around cells:
-
-```
-
-         dx
-I=    |-----|-----|-----| .... |-----|
-      x₁    x₂    x₃    x₄     xₙ    xₙ₊₁
-         I₁    I₂    I₃           Iₙ
-```
-
-Integrating (1) over each cell gives an *exact* identity for the cell
-averages - no approximation is made at this stage. Summing that identity
-over every cell telescopes: every interior face flux cancels, and only the
-two domain-boundary fluxes survive, so
-
-$$
-\frac{d}{dt}\int_I p(x,t)dx = J_t[x_1] - J_t[x_{n+1}].
-$$
-
-**Mass conservation is therefore a structural property of the
-discretization**, not something that has to be checked - positive flux at
-the left edge brings mass in, positive flux at the right edge lets mass
-out, and nothing happens to the total in between no matter how the
-interior faces are approximated. `docs/numerical_methods_notes.md` §1.1
-works through the telescoping argument in full.
-
-### Face flux model
-
-The only approximation the scheme makes is in reconstructing $J$ at each
-face from the two neighboring cell averages on the left $p_L$ and on the right $p_R$ (and
-$b_L, b_R, D_L, D_R$):
-
-- The **diffusive part** is a centered difference of $Dp$ between the two
-  neighboring cells.
-- The **advective part** is **upwinded**: it uses $p_L$ if the flow points
-  left-to-right at that face, $p_R$ otherwise. Upwinding is what keeps the
-  explicit scheme stable at any Peclet number - a centered average of
-  $p_L, p_R$ would oscillate once advection dominates diffusion - at the
-  cost of quietly adding a numerical diffusion term of size $\sim |b|dx$.
-  See `docs/numerical_methods_notes.md` §1.2 for mor details.
-
-Because both terms are linear in $(p_L, p_R)$, the whole face flux is
-$J = c_L p_L + c_R p_R$ for coefficients computed once per face
-(`_face_coeffs` in `fp1d/finite_volume.py`), and the entire operator
-assembles directly into a sparse matrix, face by face.
-
-### Boundary conditions (BC)
-
-- **Periodic**: the domain is a circle. The first and last faces are
-  identified, so $J[x_1] = J[x_{n+1}]$ by construction and mass is
-  conserved.
-- **Homogeneous Neumann (reflecting / no-flux)**: a reflecting wall means
-  *no probability/flux crosses it, in either direction* - so we simply fix
-  $J[x_1] = J[x_{n+1}] = 0$. Mass is conserved. **Beware** that this condition
-  is imposed ** on the flux J** and **NOT** on the solution $p$, as usually done with 
-  Neumann BC in PDEs.
-- **Homogeneous Dirichlet**: the density *exactly at the boundary face*, which sits at a distance`dx/2` from the adjacent cell center, is
-  set to 0. Mass is not conserved.
-
-### Time integration
-
-Writing the assembled system as $dp/dt = A p $, we discretize in time as:
-
-- **Forward Euler**: $p^{m+1} = p^m + dt(A^m p^m)$. One sparse
-  matrix-vector product per step. Cheap, but only *conditionally* stable:
-  if $dt$ is too large relative to $dx$ and the size of $b$, $D$, small
-  errors are amplified instead of damped. The GUI computes the CFL/Peclet
-  bounds below and warns before running if $dt$ exceeds them (see
-  `fp1d/diagnostics.py`), but still lets you proceed.
-- **Backward Euler**: $(I - dtA)p^{m+1} = p^m$. One sparse
-  linear solve per step. Because the update is implicit, it is
-  **unconditionally stable** in the diffusive sense. There is no $dt$ threshold below 
-  which it must stay to avoid blowing up. It still loses
-  accuracy for very large $dt$ (truncation error grows), but it will not
-  diverge.
-
-`docs/numerical_methods_notes.md` §1.4 derives exactly where these
-stability thresholds come from (von Neumann analysis), plus a couple of
-more intuitive, non-Fourier ways to see the same bounds. We also estimate the artificial (numerical)
-diffusion introduced by the methods, which is also reported in the GUI.
-
-### CFL and Peclet numbers
-
-- **Advective CFL** $= \max_{x,t}\{\|b(x,t)\| dt / dx\}$: how far (in cells)
-  information travels by advection in one time step.
-- **Diffusive CFL** $= \max \{D(x,t) dt / dx^2\}$: how far diffusion spreads in
-  one step. Forward Euler requires `advective CFL + 2diffusive CFL <= 1` to stay
-  stable.
-- **Peclet number** $\mathrm{Pe} = \max\{| b(x,t)|dx / (2D(x,t))\}$: the
-  ratio of advective to diffusive transport *across one cell*. It does not
-  constrain $dt$, but it tells you whether the local physics is dominated by advection or
-  diffusion.
-
-## Euler-Maruyama (the SDE solver)
-
-`fp1d/stochastic_solver.py` simulates the SDE in (2) directly:
-
-$$
-X_{n+1} = X_n + b(X_n, t_n) dt + \sqrt{2 D(X_n, t_n) dt} Z, \qquad Z \sim N(0, 1)
-$$
-
-for an ensemble of independent trajectories, then recovers $p(x, t)$ as a
-normalized histogram of the live particles at each requested time. The
-initial ensemble is sampled directly from the same initial density used by
-the PDE solver (`fp1d/initial_conditions.py`), so both solvers always start
-from an identical physical state.
-
-### Why use Euler-Maruyama instead of the PDE solver
-
-The finite-volume scheme differences $b$ and $D$ between neighboring cells,
-which implicitly assumes they vary smoothly at the grid scale. If $b$ or
-$D$ are rough, discontinuous (e.g. a diffusion coefficient that jumps
-across a material interface), or only available as noisy/empirical
-samples, that differencing has no clean meaning: the finite-volume solution
-can pick up spurious oscillations or lose accuracy near the irregularity,
-no matter how small $dt$ is.
-
-Euler-Maruyama never differentiates $b$ or $D$: it only *evaluates* them
-at particle positions. It therefore degrades gracefully in the presence of
-non-smooth coefficients, at the cost of trading a numerically exact mesh
-solution for Monte Carlo noise (statistical error $\sim 1/\sqrt{n_{trials}}$,
-independent of how irregular the coefficients are). In short: **finite
-volume is more accurate when $b, D$ are smooth and known everywhere;
-Euler-Maruyama is more robust when they are not.**
-`docs/numerical_methods_notes.md` §2 derives this from scratch, including
-the Ito-calculus argument for *why* the particle histogram converges to the
-same $p(x,t)$.
-
-### Boundary conditions for Euler-Maruyama
-
-| PDE boundary | Particle equivalent | Behavior |
-|---|---|---|
-| `periodic` | wrap | a particle crossing an edge re-enters on the other side |
-| `neumann` | reflect | a particle crossing an edge is folded back in (no probability lost) |
-| `dirichlet` | absorb | a particle crossing an edge is removed from the ensemble - matching the PDE's Dirichlet condition, under which mass is free to leave through the boundary and never returns |
-
-See
-`docs/numerical_methods_notes.md` §2.7 for more details on why the BC of (1) translate as 
-the above conditions at a particle level.
 
 ## Running the GUI
 
@@ -262,8 +121,11 @@ introduced by upwinding is significant relative to the true $D$ on this
 grid; `docs/numerical_methods_notes.md` §1.4 quantifies it.
 
 **Run solver**: starts the computation in a background thread (the window
-stays responsive). If Forward Euler is selected and $\lambda + 2\mu > 1$, it
-warns first and lets you proceed anyway.
+stays responsive). Before starting, it runs the same pre-flight checks
+`fp1d.solve` runs, and asks for confirmation if any of them fires: Forward
+Euler with $\lambda + 2\mu > 1$, or a cell Peclet number above 2. A periodic
+run whose $b$ or $D$ disagree at the two edges is reported as an input
+error instead.
 
 **Stop**: requests early termination. The run still saves whatever it
 computed up to that point - but what "up to that point" means depends on the
@@ -288,7 +150,67 @@ Each run creates a timestamped folder under `output/` containing a snapshot
 plot, a mass-history plot, the raw solution (`.npz`), the run parameters
 (`.json`), and an animation (`.mp4`, or `.gif` if `ffmpeg` isn't available).
 The animation plays back the frames the solver actually recorded during
-integration - not an artificially interpolated smoothing of a few snapshots.
+integration, not an artificially interpolated smoothing of a few snapshots.
+
+## Using it from Python
+
+The GUI is one front end; `fp1d.solve` is the other. They take the same
+inputs and run the same code: `gui.py` reads its arguments off the widgets
+and then calls `solve` like any other caller would, so the two can never
+drift apart. Use the API for parameter sweeps, for notebooks etc.
+
+
+`run.result` is the same `SolverResult` the integrators return directly,
+`run.grid` is the grid actually used - wider than requested if a bound was
+infinite - and `run.messages` collects the notes the GUI would have shown in
+its log. `run.save` returns the path of every file it wrote.
+
+Drift and diffusivity accept three forms: a callable `f(x, t)`, a number, or
+a string evaluated in a restricted namespace containing `x`, `t`, and numpy
+as `np` - so mathematical functions are written `np.cos(t)`, `np.exp(-x**2)`,
+and so on. Only a small whitelist of builtins is exposed alongside them; no
+imports and no filesystem access.
+
+`solve` performs stability checks and also checks whether $b$ and $D$  satisfy the
+necessary conditions (such as $D \geq 0$, or the periodicity condition in 
+the case of periodic BC), giving errors or warnings as the GUI does.
+
+### Pre-flight checks
+
+Before integrating, `solve` runs the same checks the GUI does, and
+`on_warning` decides what happens when one fires:
+
+```python
+from fp1d import solve
+
+run = solve(method='backward euler',
+            drift='-x', diffusion=0.5,      # expression, callable or number
+            left='-inf', right='+inf',      # truncated adaptively
+            dx=0.02, total_time=2.0, dt=0.001,
+            bc='neumann', initial_condition='gaussian')
+
+x, p = run.result.x, run.result.snapshots[-1]   # density at t = T
+run.save('output')                              # same files the GUI writes
+```
+
+
+```
+WARNING: Forward Euler is unstable for these settings: lambda + 2*mu = 4.995
+exceeds the stability limit of 1 (dt = 0.01; suggested dt <= 0.002002). The
+solution will grow without bound rather than converge.
+Continue anyway? [y/n]
+```
+
+- `'warn'` emits a `UserWarning` and continues. The default, because it is
+  the only mode that behaves sensibly everywhere this package runs.
+- `'ask'` prints the warnings and waits for a `y`/`n` on the terminal,
+  raising `RunAborted` on a refusal. It falls back to `'warn'` when stdin
+  is not a terminal: a prompt nobody can answer would hang a test suite, a
+  notebook cell, or the GUI's worker thread.
+- `'raise'` turns the first warning into a `RunAborted` - useful in a
+  parameter sweep, where an unstable point should be recorded rather than
+  silently produce garbage.
+- `'ignore'` proceeds silently. What the GUI passes, having already asked.
 
 ## Project layout
 
@@ -336,19 +258,27 @@ in which a run passes through them.
 **Shared machinery**
 
 | File | What it holds |
-|---|---|
+|-|--|
 | `results.py` | `SolverResult`, the single return type all three integrators produce, plus `discrete_mass` and two recorders: `SolutionRecorder` for solvers that advance in time, and `EnsembleRecorder`, which sums histogram counts over batches of trajectories so a Monte Carlo estimate is available at any point|
-| `diagnostics.py` | The CFL, diffusion, combined-stability and Peclet numbers, computed pointwise over the run rather than from separately-maximized coefficients. Also the periodic-consistency check and the time-dependence probe the solvers use to decide what can be cached |
+| `diagnostics.py` | The CFL, diffusion, combined-stability and Peclet numbers, computed pointwise over the run rather than from separately-maximized coefficients. `preflight_warnings` turns those numbers into the messages both front ends report before a run. Also the periodic-consistency check and the time-dependence probe the solvers use to decide what can be cached |
 
-**Output and driver**
+**Front ends**
+
+Two ways in, one pipeline. Neither contains any numerics of its own.
+
+| File | What it holds |
+|---|---|
+| `api.py` | `solve`, the programmatic entry point: normalizes the arguments (method aliases, coefficients given as expressions or callables or numbers, `+/-inf` bounds), runs the pre-flight checks under the `on_warning` policy, drives the pipeline, and returns a `Run` bundling the `SolverResult`, the grid actually used, the log messages, and the run parameters. `Run.save` writes the five output files |
+| `gui.py` | The Tkinter application. Reads the widgets on the main thread into a `RunConfig`, runs the pre-flight checks there (where a dialog is legal), then hands the config to `solve` on a worker thread with `on_warning='ignore'` - so everything here is presentation: layout, live diagnostics, the truncation preview, progress reporting, and the summary |
+**Output**
 
 | File | What it holds |
 |---|---|
 | `visualization.py` | Snapshot overlay, mass-history plot, animation (mp4 with a gif fallback), and the raw `.npz` dump. Forces matplotlib's `Agg` backend, since plotting happens on a worker thread |
 | `io_utils.py` | Timestamped run directories and JSON writing |
-| `gui.py` | The Tkinter application. |
 
-A run therefore flows: `gui` builds a `RunConfig` → `domain_truncation`
+A run therefore flows: `gui` builds a `RunConfig`, or a script calls `solve`
+directly → `api` resolves the coefficients and bounds → `domain_truncation`
 drives one or more attempts → each attempt builds a grid and initial
 condition and calls `finite_volume` or `stochastic_solver` → the result comes
 back as a `SolverResult` → `visualization` and `io_utils` write it to disk.
@@ -372,3 +302,6 @@ Various tests, each file covering one property:
 | `test_stationary_distribution.py` | An Ornstein-Uhlenbeck process relaxes to the right mean, and the error in the recovered stationary variance shrinks under grid refinement |
 | `test_initial_conditions.py` | Presets and custom expressions normalize to unit mass, sampled particles reproduce the density, and infinite bounds are substituted correctly |
 | `test_stop_event.py` | All three solvers honor an early-stop request and report it, including that an interrupted Euler-Maruyama run still spans $[0, T]$ and equals a full run with that many trials |
+| `test_api.py` | `solve` reproduces a hand-assembled solver call exactly, treats the three coefficient forms as equivalent, grows an unbounded domain, and rejects bad inputs |
+| `test_edge_cases.py` | Non-positive `T` or `dt` are rejected, a constant custom initial condition is broadcast, a diffusivity negative only at a Dirichlet wall is caught, save times outside the run are dropped, `parse_bound` accepts a typeset minus, and an unused `t` axis is not reported as a time range |
+| `test_warnings.py` | Each `on_warning` mode behaves as documented, `'ask'` degrades instead of blocking without a terminal, only Forward Euler gets the stability warning |

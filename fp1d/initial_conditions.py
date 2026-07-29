@@ -5,6 +5,7 @@ draws particles from that same density, so both solvers always start from
 an identical physical state - no separate, independently-tuned "initial
 particle distribution" to keep in sync.
 """
+import re
 import numpy as np
 
 
@@ -51,18 +52,63 @@ SAFE_BUILTINS = {
 }
 
 
+def safe_eval(expr: str, variables: dict, what: str = 'expression'):
+    """Evaluate one user-typed expression in the restricted namespace.
+
+    `variables` are the names the expression may use besides numpy -
+    `{'x': ...}` for an initial condition, `{'x': ..., 't': ...}` for a
+    coefficient. `what` names the field in any error message, so the user
+    is told *which* box was wrong.
+
+    Every failure comes back as a `ValueError` carrying a message meant
+    to be shown verbatim in the GUI. The most common mistake by far is
+    writing `cos(t)` rather than `np.cos(t)`, so a `NameError` naming
+    something numpy provides is answered with that specific correction
+    instead of a bare "not defined".
+    """
+    try:
+        return eval(expr, {'np': np, '__builtins__': SAFE_BUILTINS},
+                    dict(variables))
+    except NameError as exc:
+        # `NameError.name` exists from Python 3.10; fall back to parsing
+        # the message so the hint still works on older interpreters.
+        name = getattr(exc, 'name', None)
+        if name is None:
+            match = re.search(r"name '([^']+)' is not defined", str(exc))
+            name = match.group(1) if match else '?'
+        if hasattr(np, name):
+            raise ValueError(
+                f"Unknown name '{name}' in the {what}. Mathematical "
+                f"functions come from numpy: write 'np.{name}(...)' "
+                f"instead of '{name}(...)'.") from None
+        available = ', '.join(sorted(variables))
+        raise ValueError(
+            f"Unknown name '{name}' in the {what}. Available names are "
+            f"{available}, and numpy as 'np' - for example "
+            f"np.exp(-x**2).") from None
+    except SyntaxError as exc:
+        raise ValueError(f'The {what} is not valid Python: {exc.msg}.') from None
+    except Exception as exc:
+        raise ValueError(f'Could not evaluate the {what}: {exc}') from None
+
+
 def evaluate_custom_expression(expr: str, x: np.ndarray) -> np.ndarray:
     """Evaluate a user-typed density expression like 'np.exp(-x**2)'.
 
     Restricted to numpy, the variable x, and the small set of builtins
     in `SAFE_BUILTINS`.
+
+    An expression that ignores `x` entirely - a bare constant such as
+    '1.0' - evaluates to a scalar, and is broadcast to a flat density
+    over the grid. This matches how the drift and diffusivity fields
+    treat a constant expression (see `api._as_coefficient` and
+    `gui.App.build_coefficients`), so the same input means the same
+    thing in every expression box in the program.
     """
-    safe_globals = {'np': np, '__builtins__': SAFE_BUILTINS}
-    try:
-        values = eval(expr, safe_globals, {'x': x})
-    except Exception as exc:
-        raise ValueError(f'Could not evaluate custom expression: {exc}')
-    values = np.asarray(values, dtype=float)
+    values = np.asarray(safe_eval(expr, {'x': x}, 'custom initial condition'),
+                        dtype=float)
+    if values.shape == ():
+        values = np.full_like(x, float(values), dtype=float)
     if values.shape != x.shape:
         raise ValueError('Custom expression must return one value per grid point.')
     return values

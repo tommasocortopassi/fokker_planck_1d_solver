@@ -17,15 +17,9 @@ worst |b| and worst D considered separately. Combining the separate
 maxima, max|b| * dt/dx + 2 * max(D) * dt/dx**2, is a valid but generally
 over-conservative upper bound on the true combined number: it implicitly
 assumes the worst drift and the worst diffusion happen at the same point
-at the same time, which they need not. `max_combined_cfl` below computes
+at the same time, which they need not. `sample_diagnostics` below computes
 the *exact* pointwise maximum instead, from the actual (time, space)
 field of lambda + 2*mu.
-
-The Peclet number Pe = |b| * dx / (2 * D) is a purely spatial quantity -
-the ratio of advective to diffusive transport across one cell - and does
-not constrain dt at all; a large Pe just means the (unavoidable, from
-upwinding) numerical diffusion is significant relative to the true D on
-this grid.
 
 Backward Euler is unconditionally stable and does not need any of these
 bounds to run, but they are still reported for insight into the
@@ -100,7 +94,7 @@ def sample_diagnostics(grid, drift, diffusion, dt, total_time, n_time_samples=25
     B = _sample_field(drift, x, total_time, n_time_samples)
     D = _sample_field(diffusion, x, total_time, n_time_samples)
     if np.any(D < 0):
-        raise ValueError('Diffusion must remain non-negative.')
+        raise ValueError('Diffusion must be non-negative.')
 
     max_abs_b = float(np.max(np.abs(B)))
     max_D = float(np.max(D))
@@ -143,13 +137,41 @@ def sample_diagnostics(grid, drift, diffusion, dt, total_time, n_time_samples=25
     }
 
 
-def max_combined_cfl(grid, drift, diffusion, dt, total_time, n_time_samples=25):
-    """Standalone convenience wrapper around the combined-number
-    computation in `sample_diagnostics`, for callers that only want this
-    one number without the rest of the diagnostics dictionary.
+def preflight_warnings(grid, drift, diffusion, dt, total_time, method,
+                        bc_kind):
+    """Everything worth telling the user *before* a run starts.
+
+    Returns `(messages, diagnostics)`. `messages` is a list of strings,
+    empty when nothing is wrong; `diagnostics` is the full
+    `sample_diagnostics` dictionary, returned so the caller does not
+    have to compute it twice.
+
+    Conditions that make the discretization ill-defined raise here
+    instead of being reported - there is no useful "proceed anyway" for
+    a periodic run whose coefficients are not periodic, and letting it
+    through would produce numbers with no meaning attached.
     """
-    return sample_diagnostics(grid, drift, diffusion, dt, total_time,
-                               n_time_samples)['combined_CFL']
+    # Raised, not warned: a periodic seam with mismatched coefficients
+    # has no well-defined flux. Checking here rather than waiting for
+    # `assemble_operator` means the user hears about it before any
+    # grid is built or any step is taken.
+    if bc_kind == 'periodic':
+        check_periodic_consistency(drift, diffusion, grid.left, grid.right, 0.0)
+
+    d = sample_diagnostics(grid, drift, diffusion, dt, total_time)
+    messages = []
+
+    # Forward Euler only: the implicit scheme is unconditionally stable,
+    # and Euler-Maruyama has no CFL condition at all.
+    if method == 'forward euler' and not d['stable']:
+        messages.append(
+            f"Forward Euler is unstable for these settings: "
+            f"lambda + 2*mu = {d['combined_CFL']:.4g} exceeds the stability "
+            f"limit of 1 (dt = {dt:.4g}; suggested dt <= "
+            f"{d['dt_suggested']:.4g}). The solution will grow without "
+            f"bound rather than converge.")
+
+    return messages, d
 
 
 def check_periodic_consistency(drift, diffusion, left, right, t):

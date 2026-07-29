@@ -89,9 +89,16 @@ def _build_interpolator(x_saved, values, t_saved=None):
             f'Expected a time-dependent coefficient of shape '
             f'({t_saved.size}, {x_saved.size}), got {values.shape}.'
         )
+    # `fill_value=np.nan` rather than `None`: the wrapper below clamps
+    # every query point into the saved range before the interpolator
+    # sees it, so out-of-range points cannot arise. `None` would mean
+    # "extrapolate", which is precisely what this module promises not to
+    # do - and if the clamping were ever broken, extrapolation would
+    # hide the bug behind plausible numbers while a NaN propagates
+    # visibly into the solution.
     interpolator = RegularGridInterpolator(
         (t_saved, x_saved), values, method='linear',
-        bounds_error=False, fill_value=None,
+        bounds_error=False, fill_value=np.nan,
     )
     t_min, t_max = float(t_saved.min()), float(t_saved.max())
     x_min, x_max = float(x_saved.min()), float(x_saved.max())
@@ -146,11 +153,17 @@ def load_coefficient_set(path):
     drift = _build_interpolator(x_saved, b_raw, t_saved if b_time_dep else None)
     diffusion = _build_interpolator(x_saved, D_raw, t_saved if D_time_dep else None)
 
+    # A file may carry a 't' array that nothing actually uses, if both b
+    # and D turned out to be 1D. Reporting a time range in that case
+    # would tell the GUI to display the coefficients as time-dependent
+    # when they are not, so the range is reported only when at least one
+    # coefficient is genuinely indexed by it.
+    time_axis_used = b_time_dep or D_time_dep
     info = {
         'file': path.name,
         'x_range': (float(np.min(x_saved)), float(np.max(x_saved))),
         't_range': ((float(np.min(t_saved)), float(np.max(t_saved)))
-                    if t_saved is not None else None),
+                    if time_axis_used else None),
         'drift_time_dependent': b_time_dep,
         'diffusion_time_dependent': D_time_dep,
     }

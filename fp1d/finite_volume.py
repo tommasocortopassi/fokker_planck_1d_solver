@@ -22,8 +22,9 @@ neighboring cell centers, or dx/2 between a boundary face and the one
 adjacent cell center it touches.
 
 Because both terms are linear in (p_L, p_R), we can write J = cL * p_L + cR * p_R for
-some coefficients (cL, cR); `_face_coeffs` returns them. The whole operator
-is then assembled face-by-face directly into a sparse matrix.
+some coefficients (cL, cR); `_face_coeffs` returns them. Every face's pair is
+computed in one vectorized batch and summed straight into a sparse matrix
+(see `assemble_operator`).
 
 Boundary conditions
 --------------------
@@ -69,6 +70,15 @@ def _face_coeffs(bL, bR, DL, DR, distance):
     cL = adv_L + DL / distance
     cR = adv_R - DR / distance
     return cL, cR
+
+
+def _at_point(coefficient, x_value, t):
+    """Evaluate a coefficient at the single point `x_value`, as a float.
+
+    The coefficient callables are array-valued, so a lone boundary face
+    still has to pass a length-1 array in and take element 0 back out.
+    """
+    return float(np.asarray(coefficient(np.array([x_value]), t))[0])
 
 
 def assemble_operator(grid, drift, diffusion, t, bc: BoundaryCondition):
@@ -130,21 +140,31 @@ def assemble_operator(grid, drift, diffusion, t, bc: BoundaryCondition):
         # the ghost side, D at the cell centre for the interior side.
         # Using the boundary D on both sides would be an O(dx) error in
         # the flux whenever D varies in x.
-        b_L = float(np.asarray(drift(np.array([grid.left]), t))[0])
-        D_L = float(np.asarray(diffusion(np.array([grid.left]), t))[0])
-        _, cR_left = _face_coeffs(b_L, b_L, D_L, float(D[0]), dx / 2.0)
-        rows = np.append(rows, 0)
-        cols = np.append(cols, 0)
-        data = np.append(data, cR_left / dx)
+        b_L = _at_point(drift, grid.left, t)
+        D_L = _at_point(diffusion, grid.left, t)
 
         # Right boundary face: symmetric story, dx/2 to the right of
         # cell n-1.
-        b_R = float(np.asarray(drift(np.array([grid.right]), t))[0])
-        D_R = float(np.asarray(diffusion(np.array([grid.right]), t))[0])
+        b_R = _at_point(drift, grid.right, t)
+        D_R = _at_point(diffusion, grid.right, t)
+
+        # D sampled *at* the wall never reaches the operator: it belongs
+        # to the ghost side of the face, and the ghost value is 0 under a
+        # homogeneous Dirichlet condition, so `_face_coeffs` returns it
+        # in the coefficient that is discarded just below. It is still
+        # evaluated and checked here because a diffusivity that goes
+        # negative anywhere on the closed domain is a broken
+        # diffusivity, and the bulk check above only ever saw cell
+        # centres - which never coincide with x = left or x = right.
+        if D_L < 0.0 or D_R < 0.0:
+            raise ValueError('Diffusion must be non-negative.')
+
+        _, cR_left = _face_coeffs(b_L, b_L, D_L, float(D[0]), dx / 2.0)
         cL_right, _ = _face_coeffs(b_R, b_R, float(D[-1]), D_R, dx / 2.0)
-        rows = np.append(rows, n - 1)
-        cols = np.append(cols, n - 1)
-        data = np.append(data, -cL_right / dx)
+
+        rows = np.concatenate([rows, [0, n - 1]])
+        cols = np.concatenate([cols, [0, n - 1]])
+        data = np.concatenate([data, [cR_left / dx, -cL_right / dx]])
 
     return sparse.coo_matrix((data, (rows, cols)), shape=(n, n)).tocsr()
 
@@ -157,6 +177,11 @@ def _run(p0, grid, dt, total_time, save_times,
     step; everything else here (recording snapshots/mass/frames, progress
     reporting, early stop) is common to both integrators.
 
+    `dt` and `total_time` are both required to be strictly positive.
+    Without that guard `nsteps` becomes 0 for `total_time = 0` and the
+    renormalization below divides by it - a `ZeroDivisionError` from deep
+    inside the loop setup, rather than a message naming the bad input.
+
     `dt` is passed *into* `step_fn` rather than captured by it, because
     the requested dt is renormalized below whenever it doesn't evenly
     divide `total_time`. A `step_fn` closing over the caller's original
@@ -164,6 +189,11 @@ def _run(p0, grid, dt, total_time, save_times,
     here assumes, and the run would silently end at
     ceil(total_time/dt)*dt instead of at `total_time`.
     """
+    if dt <= 0.0:
+        raise ValueError('Time step dt must be positive.')
+    if total_time <= 0.0:
+        raise ValueError('Total time must be positive.')
+
     nsteps = int(np.ceil(total_time / dt))
     dt = total_time / nsteps  # spread any leftover evenly over all steps
     p = np.asarray(p0, dtype=float).copy()

@@ -100,26 +100,20 @@ def save_animation(x, frame_times, frames, filename_prefix, fps=20):
     ax.grid(True, alpha=0.3)
     title = ax.set_title('')
 
-    def init():
-        line.set_data(x, frames[0])
-        title.set_text(f't = {frame_times[0]:.5g}')
-        return line, title
-
     def update(i):
         line.set_data(x, frames[i])
         title.set_text(f't = {frame_times[i]:.5g}')
         return line, title
 
-    anim = FuncAnimation(fig, update, init_func=init, frames=n_frames,
-                          interval=1000 / fps, blit=True)
+    anim = FuncAnimation(fig, update, init_func=lambda: update(0),
+                          frames=n_frames, interval=1000 / fps, blit=True)
 
     mp4_file = str(filename_prefix) + '.mp4'
-    gif_file = str(filename_prefix) + '.gif'
     try:
         anim.save(mp4_file, writer=FFMpegWriter(fps=fps, bitrate=1800))
         out = mp4_file
     except Exception:
-        anim.save(gif_file, writer=PillowWriter(fps=fps))
-        out = gif_file
+        out = str(filename_prefix) + '.gif'
+        anim.save(out, writer=PillowWriter(fps=fps))
     plt.close(fig)
     return out

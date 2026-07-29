@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fp1d"
+version = "1.0.0"
+description = "1D Fokker-Planck equation solvers: conservative finite volume (forward and backward Euler) and Euler-Maruyama particles, with a Tkinter GUI"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Tommaso Cortopassi" }]
+keywords = [
+    "fokker-planck",
+    "finite-volume",
+    "stochastic-differential-equations",
+    "euler-maruyama",
+    "numerical-methods",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+]
+
+# Kept in step with requirements.txt, which stays for `pip install -r`.
+# `tkinter` is deliberately absent: it ships with CPython on Windows and
+# macOS and comes from the system package manager on Linux, so it cannot
+# be installed from PyPI and listing it here would break the install.
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pillow",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+# Same entry point as `python run_gui.py`, available as a command once
+# the package is installed.
+fp1d-gui = "fp1d.gui:main"
+
+[tool.setuptools]
+packages = ["fp1d"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

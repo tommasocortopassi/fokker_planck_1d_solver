@@ -9,6 +9,7 @@ implement the same recording logic once, instead of each keeping their own
 slightly-diverging copy of it.
 """
 from dataclasses import dataclass
+from typing import Optional
 import numpy as np
 
 
@@ -26,7 +27,7 @@ class SolverResult:
     # None for the PDE solvers, where the notion doesn't apply. This is
     # what tells the caller that a stopped Euler-Maruyama run is short of
     # *samples* rather than short of simulated time.
-    trials_completed: int = None
+    trials_completed: Optional[int] = None
 
 
 def discrete_mass(p: np.ndarray, grid) -> float:
@@ -60,9 +61,15 @@ class SolutionRecorder:
         self.total_time = total_time
         self.saved = {}
         self.masses = {}
-        # Save times strictly after t=0; t=0 itself is always recorded by
-        # `record_initial` regardless of whether the user asked for it.
-        self._remaining_targets = iter(sorted(t for t in save_times if t > 0.0))
+        # Save times strictly after t=0 and no later than the end of the
+        # run; t=0 itself is always recorded by `record_initial` and
+        # `total_time` by `record_final`, regardless of what was asked
+        # for. The upper clip mirrors `EnsembleRecorder` below, so the
+        # two recorders agree on which requested times are in scope
+        # rather than one of them merely never happening to reach an
+        # out-of-range target.
+        self._remaining_targets = iter(sorted(
+            t for t in save_times if 0.0 < t <= total_time))
         self._next_target = next(self._remaining_targets, None)
         # Record at most `max_frames` animation frames, evenly spaced in
         # step count (not simulated time, which isn't known in advance).
@@ -76,6 +83,11 @@ class SolutionRecorder:
         self.frame_times.append(0.0)
         self.frames.append(density.copy())
 
+    def _target_reached(self, current_time: float) -> bool:
+        """Has the next requested save time been reached (or passed)?"""
+        return (self._next_target is not None
+                and current_time >= self._next_target - 1e-12)
+
     def record_step(self, steps_completed: int, current_time: float,
                      is_last_step: bool, density_fn):
         """Call once per completed step. `density_fn()` must return the
@@ -84,9 +96,7 @@ class SolutionRecorder:
         passed) the next requested save time.
         """
         is_frame_step = (steps_completed % self.stride == 0) or is_last_step
-        target_hit = (self._next_target is not None
-                      and current_time >= self._next_target - 1e-12)
-        if not (is_frame_step or target_hit):
+        if not (is_frame_step or self._target_reached(current_time)):
             return
 
         density = density_fn()
@@ -97,8 +107,7 @@ class SolutionRecorder:
 
         # A single (large) step can overshoot more than one requested
         # save time at once, so drain every target that's now behind us.
-        while (self._next_target is not None
-               and current_time >= self._next_target - 1e-12):
+        while self._target_reached(current_time):
             self.saved[self._next_target] = density.copy()
             self.masses[self._next_target] = discrete_mass(density, self.grid)
             self._next_target = next(self._remaining_targets, None)
@@ -168,8 +177,7 @@ class EnsembleRecorder:
 
         # Animation frames: evenly spaced in step count, endpoints included.
         stride = max(1, nsteps // max_frames)
-        frame_steps = sorted({0, nsteps} |
-                             {n for n in range(1, nsteps + 1) if n % stride == 0})
+        frame_steps = sorted({0, nsteps, *range(stride, nsteps + 1, stride)})
         self.frame_times = np.array([n * dt for n in frame_steps])
 
         self._save_counts = np.zeros((len(targets), grid.ncells), dtype=np.int64)
