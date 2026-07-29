@@ -1,9 +1,10 @@
 # 1D Fokker-Planck Solver
-+
-+[![tests](https://github.com/tommasocortopassi/fokker_planck_1d_solver/actions/workflows/tests.yml/badge.svg)](https://github.com/tommasocortopassi/fokker_planck_1d_solver/actions/workflows/tests.yml)
-+
+
+[![tests](https://github.com/tommasocortopassi/fokker_planck_1d_solver/actions/workflows/tests.yml/badge.svg)](https://github.com/tommasocortopassi/fokker_planck_1d_solver/actions/workflows/tests.yml)
+
  *Three independent solvers against the exact solution:*
-![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
+
+ ![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
 
 This project implements solvers for a 1-dimensional Fokker-Planck equation:
 - a **finite-volume PDE solver** (forward and backward Euler)
