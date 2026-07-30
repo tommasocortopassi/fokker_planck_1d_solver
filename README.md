@@ -6,7 +6,7 @@
 
  ![Forward Euler, Backward Euler and Euler-Maruyama against the exact solution](docs/img/demo.gif)
 
-This project implements solvers for a 1-dimensional Fokker-Planck equation:
+A Python implementation of a finite-difference solver for a 1-dimensional Fokker-Planck equation used in statistical physics, quantitative finance and diffusion models. This project implements solvers for :
 - a **finite-volume PDE solver** (forward and backward Euler)
 - an **Euler-Maruyama particle solver** for the equivalent stochastic
   differential equation (SDE)
