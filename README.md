@@ -11,11 +11,52 @@ This project implements solvers for a 1-dimensional Fokker-Planck equation:
 - an **Euler-Maruyama particle solver** for the equivalent stochastic
   differential equation (SDE)
 
-driven by a single GUI that shares the same initial condition, domain, and
-boundary condition between both solvers. This README is a practical
-overview and usage guide. For the full derivations - the origin of artificial (numerical) diffusion, the von Neumann stability
-analysis behind the CFL and Peclet numbers, and the Ito-calculus derivation
-that connects the SDE to the PDE - see `docs/numerical_methods_notes.md`.
+driven by two front ends that share the same pipeline: a Tkinter GUI and a
+one-call Python API. Both take the same initial condition, domain, and
+boundary condition, and hand them to the same solvers. This README is a
+practical overview and usage guide. For the full derivations (the origin
+of artificial (numerical) diffusion, the von Neumann stability analysis
+behind the CFL and Peclet numbers, and the Ito-calculus derivation that
+connects the SDE to the PDE) see `docs/numerical_methods_notes.md`.
+
+## Quickstart
+
+```bash
+git clone https://github.com/tommasocortopassi/fokker_planck_1d_solver.git
+cd fokker_planck_1d_solver
+pip install -e .
+```
+
+Three ways to use, same logic underneath: same solvers, same parameters,
+same results.
+
+**Notebook.** `fokker_planck_experiments.ipynb` runs all three solvers
+against exact solutions on four problems, and ends with a playground cell
+that mirrors the GUI field for field. It ships with its outputs, so it
+reads without running; open it in
+[Colab](https://colab.research.google.com/github/tommasocortopassi/fokker_planck_1d_solver/blob/master/fokker_planck_experiments.ipynb)
+to change something.
+
+**API.** For scripts and parameter sweeps:
+
+```python
+from fp1d import solve
+
+run = solve(method='backward euler',
+            drift='-x', diffusion=0.5,      # expression, callable or number
+            left='-inf', right='+inf',      # truncated adaptively
+            dx=0.02, total_time=2.0, dt=0.001,
+            bc='neumann', initial_condition='gaussian')
+
+x, p = run.result.x, run.result.snapshots[-1]   # density at t = T
+```
+
+**GUI.** `python run_gui.py`, or `fp1d-gui` once installed. Every parameter
+is a field; results go to a timestamped folder under `output/`.
+
+Requires Python 3.10+, plus `tkinter` for the GUI (bundled with CPython on
+Windows and macOS, `apt install python3-tk` or equivalent on Linux).
+Run the tests with `pytest`
 
 ## The equation
 
