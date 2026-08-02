@@ -9,14 +9,6 @@ kind:
                   boundary (zero total flux, advective + diffusive).
     'dirichlet' - the density is pinned to zero at each edge;
                   probability is free to flow out there.
-
-Earlier versions of this dataclass also carried `left_value`/`right_value`
-fields for a nonzero Dirichlet/Neumann condition, but neither solver ever
-actually used them (both always implemented the homogeneous case), which
-made them silently misleading. They've been removed; adding genuine
-nonzero-boundary support would mean giving `finite_volume.assemble_operator`
-a real source vector and `stochastic_solver`'s absorbing rule a matching
-particle-injection rule (see docs/numerical_methods_notes.md, section 2.7).
 """
 from dataclasses import dataclass
 
