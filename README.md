@@ -347,3 +347,91 @@ Various tests, each file covering one property:
 | `test_api.py` | `solve` reproduces a hand-assembled solver call exactly, treats the three coefficient forms as equivalent, grows an unbounded domain, and rejects bad inputs |
 | `test_edge_cases.py` | Non-positive `T` or `dt` are rejected, a constant custom initial condition is broadcast, a diffusivity negative only at a Dirichlet wall is caught, save times outside the run are dropped, `parse_bound` accepts a typeset minus, and an unused `t` axis is not reported as a time range |
 | `test_warnings.py` | Each `on_warning` mode behaves as documented, `'ask'` degrades instead of blocking without a terminal, only Forward Euler gets the stability warning |
+
+## Reading order
+
+The package is a directed acyclic graph three levels deep: eight modules
+import nothing else from `fp1d`, and no module ever imports something that
+transitively imports it back. The code can be read strictly bottom-up, where
+every file below relies only on the files above it, so nothing is ever a
+forward reference.
+
+The order below builds the problem before it solves it: first the objects a
+run is described *with*, then the machinery that carries a run's output,
+then the two solvers, and finally the two front ends that assemble
+everything into one call.
+
+**1. `boundary_conditions.py`** (32 lines) — start here: the smallest
+complete module in the package. A module-level constant, one frozen
+dataclass with a single field and one validating method. It names the
+boundary conditions the rest of the package works with.
+
+**2. `grid.py`** (131 lines) — `Grid1D` is a frozen dataclass whose derived
+quantities (`dx`, `faces`, `centers`) are computed on demand rather than
+stored, and whose invariants are checked in `__post_init__`. `parse_bound`
+and `finite_domain` handle `inf` and the various ways a user can type a
+bound.
+
+**3. `results.py`** (244 lines) — `SolverResult` is a plain record;
+`discrete_mass` is the one-line quadrature used everywhere;
+`SolutionRecorder` and `EnsembleRecorder` are the first classes with
+genuinely mutable state, accumulating frames as a run proceeds. Reading
+these before the solvers is what makes the solver loops look as short as
+they do: all of their bookkeeping lives here.
+
+**4. `initial_conditions.py`** (153 lines) — the presets, and `safe_eval`:
+`eval` with its globals replaced by a nine-name whitelist. The
+error-handling block: three different Python exceptions are flattened into
+one `ValueError` whose message is written for the person typing into the
+GUI. `sample_particles_from_density` is what lets the SDE solver start from
+exactly the same state as the PDE solver.
+
+**5. `coefficients_io.py`** (170 lines) — loading `b` and `D` from an
+`.npz` file. The important construct is `_build_interpolator`, a function
+that *returns a function*: the returned closure carries the saved samples
+with it and is called later as `coefficient(x, t)`, indistinguishable from
+a typed expression. Array shapes carry meaning here — `(nx,)` means static,
+`(nt, nx)` means time-dependent.
+
+**6. `diagnostics.py`** (192 lines) — pure functions, no state: the CFL,
+diffusion, combined-stability and Peclet numbers, sampled pointwise over
+the run. `preflight_warnings` turns those numbers into the sentences both
+front ends show. Short and worth reading in full, because both solvers and
+both front ends call into it.
+
+**7. `finite_volume.py`** (308 lines) — the numerical core, and the densest
+file in the package. `assemble_operator` builds the sparse matrix $A$ in
+$\dot p = Ap$ face by face; the flux discretizes
+$\partial^2(Dp)/\partial x^2$. `forward_euler` and `backward_euler` each
+define a local `step` function and hand it to the shared `_run` loop.
+
+**8. `stochastic_solver.py`** (217 lines) — the same equation from the
+Lagrangian side: Euler-Maruyama on particle paths, with the density
+recovered as a normalized histogram. Boundary conditions become particle
+rules (wrap, reflect, absorb). Read it directly after `finite_volume.py`,
+while that one is still fresh: the pairing of the two descriptions is the
+point of the project.
+
+**9. `domain_truncation.py`** (186 lines) — needed when the domain is
+unbounded. It calls the function it was given on progressively wider grids
+until the density reaching the artificial boundary is negligible, without
+knowing anything about which solver it is holding.
+
+**10. `api.py`** (464 lines) — everything above, assembled. `solve` itself
+computes nothing: it normalizes heterogeneous inputs into canonical forms
+(method aliases through a dict, coefficients into `(x, t)` callables via
+`_as_coefficient`, bounds into floats), validates in order of increasing
+cost, delegates to `domain_truncation`, and packages the result in a `Run`.
+The body is a linear sequence of stages with no deep branching, so it reads
+top to bottom.
+
+**11. `gui.py`** (711 lines) — the same pipeline driven by widgets, and the
+largest file. Nothing numerical happens here.
+
+Two things to read alongside rather than in sequence: `tests/`, where each
+file pins down one property and the shortest of them double as usage
+examples, and `fokker_planck_experiments.ipynb`, which checks all three
+solvers against exact solutions. `visualization.py` (119 lines) and
+`io_utils.py` (24 lines) can be read last or skipped; they are plotting and
+file-writing helpers and depend on nothing else.
+
